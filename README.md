@@ -4,7 +4,7 @@
 
 ### Iniciar la instancia de MySQL en Docker
 
-Para iniciar una instancia de **MySQL** en un contenedor Docker, ejecuta el siguiente comando en la terminal de tu **GitHub Codespace**:
+Para iniciar una instancia de **MySQL** en un contenedor Docker, ejecuta el siguiente comando en la terminal de tu **GitHub Codespace**, en tu **terminal de Mac OS** o bien tu **terminal de git bash**:
 
 ```sh
 docker run --name mysql-container -e MYSQL_ROOT_PASSWORD=contrasena -e MYSQL_DATABASE=tienda_simple -p 3306:3306 -d mysql:latest

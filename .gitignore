@@ -1,0 +1,28 @@
+# --- Python ---
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# --- Node.js (backend Express o frontend React + Vite) ---
+node_modules/
+dist/
+
+# --- Variables de entorno y credenciales: nunca se suben ---
+.env
+.env.*
+!.env.example
+
+# --- Schemathesis / Hypothesis (caché de las pruebas automáticas) ---
+.hypothesis/
+.schemathesis/
+schemathesis-report/
+
+# --- Configuración local de agentes de IA y editores ---
+.claude/settings.local.json
+.vscode/
+.idea/
+
+# --- Sistema operativo ---
+.DS_Store
+Thumbs.db

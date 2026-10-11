@@ -362,7 +362,11 @@
     </div>
 
     <script>
-        const API_BASE_URL = 'https://sturdy-computing-machine-r46q74wjw67ghxw6-3000.app.github.dev/api/v1';
+        // Cambia esta URL según dónde corre tu backend:
+        //  - Local (Mac / Windows): http://localhost:3000/api/v1
+        //  - GitHub Codespaces: la URL pública del puerto 3000 (pestaña Ports), p. ej.
+        //    https://<nombre-de-tu-codespace>-3000.app.github.dev/api/v1
+        const API_BASE_URL = 'http://localhost:3000/api/v1';
         
         // Estado local de la app para mapear Relaciones (IDs -> Nombres)
         let cacheClientes = [];

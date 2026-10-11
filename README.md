@@ -1,3 +1,71 @@
+# 0. Pre-requisitos
+
+Elige **una** de las tres opciones (Codespaces, macOS o Windows). Al final de esta sección corre la verificación.
+
+| Herramienta | Para qué se usa | Versión sugerida |
+|---|---|---|
+| Docker | Correr MySQL en un contenedor | Docker Desktop 4.x / Engine 24+ |
+| Python + pip | Backend Flask (`AIGenerated/ws.py`) | 3.10 o superior |
+| Node.js + npm | Solo si generas el backend en Express o el frontend en React + Vite | 20 LTS o superior |
+| Git | Clonar el repositorio | cualquiera reciente |
+| Asistente de IA | Generar el YAML y el código | Claude, ChatGPT, Copilot, etc. |
+
+## Opción A: GitHub Codespaces (recomendada, no requiere instalar nada)
+
+1. En el repositorio: **Code → Codespaces → Create codespace on main**.
+2. Espera a que termine de construir. El `devcontainer.json` ya incluye **Python 3.12, Node.js 20 y Docker**, e instala automáticamente las dependencias de `requirements.txt`.
+3. Cuando el backend esté corriendo (sección 3), abre la pestaña **Ports**, da clic derecho sobre el puerto **3000 → Port Visibility → Public** y copia su URL (`https://<nombre>-3000.app.github.dev`). Esa será la base URL de tu frontend, **no** `localhost`.
+
+## Opción B: macOS
+
+1. Instala [Docker Desktop para Mac](https://www.docker.com/products/docker-desktop/) (elige **Apple Silicon** o **Intel** según tu equipo) y ábrelo. El ícono de la ballena debe aparecer activo en la barra de menú.
+2. Instala Python, Node y Git (con [Homebrew](https://brew.sh)):
+   ```sh
+   brew install python node git
+   ```
+3. Dentro de la carpeta del proyecto, crea y activa un entorno virtual (Homebrew no permite `pip install` global):
+   ```sh
+   python3 -m venv .venv
+   source .venv/bin/activate
+   ```
+4. Si ya tienes MySQL instalado localmente, el puerto 3306 estará ocupado. Detenlo con `brew services stop mysql`, o usa otro puerto en el `docker run` (`-p 3307:3306`) y exporta `DB_PORT=3307` antes de correr el backend.
+
+## Opción C: Windows 10/11
+
+1. Instala [Docker Desktop para Windows](https://www.docker.com/products/docker-desktop/) con el backend **WSL 2** (el instalador lo solicita y puede requerir reiniciar). Ábrelo antes de continuar.
+2. Instala [Git for Windows](https://git-scm.com/download/win) (incluye **Git Bash**), [Python 3.12](https://www.python.org/downloads/) (marca **"Add python.exe to PATH"** durante la instalación) y [Node.js LTS](https://nodejs.org).
+3. Usa **Git Bash** para todos los comandos del tutorial. Dentro de la carpeta del proyecto crea y activa un entorno virtual:
+   ```sh
+   python -m venv .venv
+   source .venv/Scripts/activate
+   ```
+4. En Git Bash, si `docker exec -it ...` muestra *"the input device is not a TTY"*, antepón `winpty`:
+   ```sh
+   winpty docker exec -it mysql-container mysql -u root -pcontrasena
+   ```
+   > En PowerShell la redirección `< tienda_simple.sql` no funciona; usa Git Bash.
+
+## Instalar dependencias de Python (Mac y Windows)
+
+Con el entorno virtual activado (en Codespaces ya quedaron instaladas):
+
+```sh
+pip install -r requirements.txt
+```
+
+## Verificación
+
+```sh
+docker --version && docker run --rm hello-world
+python3 --version   # en Windows: python --version
+pip show flask flask-cors mysql-connector-python
+node --version      # solo si usarás Express o React
+```
+
+Si `hello-world` imprime *"Hello from Docker!"* y `pip show` lista los tres paquetes, estás listo para la sección 1.
+
+***
+
 # 1. Base de datos ejemplo
 
 ## Configuración de MySQL
@@ -7,7 +75,7 @@
 Para iniciar una instancia de **MySQL** en un contenedor Docker, ejecuta el siguiente comando en la terminal de tu **GitHub Codespace**, en tu **terminal de Mac OS** o bien tu **terminal de git bash**:
 
 ```sh
-docker run --name mysql-container -e MYSQL_ROOT_PASSWORD=contrasena -e MYSQL_DATABASE=tienda_simple -p 3306:3306 -d mysql:latest
+docker run --name mysql-container -e MYSQL_ROOT_PASSWORD=contrasena -e MYSQL_DATABASE=tienda_simple -p 3306:3306 -d mysql:8.4
 ```
 
 ### Conectarse al contenedor a través de la herramienta de linea de comandos para generar las tablas
@@ -43,9 +111,10 @@ SELECT * from pedidos;
 
 Para salir escriba *quit* y presione enter
 
-### Instala conector python-MySQL
+### Dependencias de Python
+Las dependencias del backend (`flask`, `flask-cors` y `mysql-connector-python`) ya se instalaron en el **paso 0**. Si te faltó, ejecuta:
 ```sh
-pip install mysql-connector-python
+pip install -r requirements.txt
 ```
 
 ***
@@ -240,9 +309,31 @@ Requisitos:
 ---
 
 
+## Ejecutar el backend de ejemplo
+
+En la carpeta `AIGenerated/` hay un backend Flask ya generado (`ws.py`) a partir de `openapi.yaml`. Con el contenedor de MySQL corriendo:
+
+```sh
+python AIGenerated/ws.py
+```
+
+El servidor escucha en el puerto **3000**. Pruébalo desde otra terminal:
+
+```sh
+curl http://localhost:3000/api/v1/clientes
+```
+
+La conexión a MySQL usa estas variables de entorno (con sus valores por defecto): `DB_HOST=localhost`, `DB_USER=root`, `DB_PASSWORD=contrasena`, `DB_NAME=tienda_simple`, `DB_PORT=3306`. Si cambiaste el puerto en el `docker run`, expórtalo antes de arrancar, por ejemplo `export DB_PORT=3307`.
+
+> **Codespaces:** recuerda poner el puerto 3000 como **Public** en la pestaña **Ports** (ver paso 0).
+
+***
+
 # 4. Generar el frontend a partir de los webservices usando IA
 
-Una vez que tienes los servicios web funcionando, el mismo YAML de OpenAPI (y opcionalmente el código del servidor) sirven como base para que la IA genere un cliente web funcional. Los prompts siguientes asumen que el servidor corre en `http://localhost:3000/api/v1`.
+Una vez que tienes los servicios web funcionando, el mismo YAML de OpenAPI (y opcionalmente el código del servidor) sirven como base para que la IA genere un cliente web funcional. Los prompts siguientes asumen que el servidor corre en `http://localhost:3000/api/v1`. Si trabajas en **Codespaces**, sustituye esa URL por la URL pública del puerto 3000 (`https://<nombre>-3000.app.github.dev/api/v1`).
+
+> El ejemplo `AIGenerated/index.html` define la constante `API_BASE_URL`; ajústala según tu entorno antes de abrirlo en el navegador.
 
 ## HTML + JavaScript (sin frameworks)
 

@@ -480,35 +480,164 @@ Tu código puede tener muchas fallas o pocas; eso depende del modelo y de tu pro
 
 ## 5.1 Tu auditoría (sin IA)
 
-Lee tu código y pruébalo con `curl`, Postman o el frontend. Usa estas preguntas guía:
+Lee tu código y pruébalo con `curl`, Postman o el frontend. La auditoría tiene tres partes: aprender a probar la API con `curl`, revisar las preguntas guía y registrar tus hallazgos.
+
+### Cómo probar los servicios web con curl
+
+`curl` es una herramienta de línea de comandos que envía peticiones HTTP. Ya viene instalada en macOS y en Git Bash. En Windows úsala **desde Git Bash**: en PowerShell, `curl` puede ser un alias de otro comando con una sintaxis distinta.
+
+Con tu backend corriendo en una terminal, abre **otra** terminal para las pruebas. Para no repetir la URL base en cada comando, guárdala en una variable:
+
+```sh
+BASE=http://localhost:3000/api/v1
+```
+
+**Opciones de curl que vas a usar**
+
+| Opción | Para qué sirve |
+|---|---|
+| `-i` | Muestra el código de estado HTTP y los encabezados de la respuesta, además del cuerpo. **Úsala siempre en la auditoría**: el código de estado es parte de lo que estás revisando. |
+| `-X MÉTODO` | Indica el método HTTP: `GET` (el valor por defecto), `POST`, `PUT` o `DELETE`. |
+| `-H "Content-Type: application/json"` | Le dice al servidor que el cuerpo que envías es JSON. Es obligatorio en `POST` y `PUT`. |
+| `-d '...'` | El cuerpo de la petición. Usa comillas simples por fuera y comillas dobles dentro del JSON. |
+| `-s` | Modo silencioso: oculta la barra de progreso. Útil cuando rediriges la salida a otro comando. |
+
+**Las cinco operaciones CRUD**
+
+```sh
+# Listar todos los registros (GET)
+curl -i $BASE/clientes
+
+# Consultar un registro por id (GET)
+curl -i $BASE/productos/1
+
+# Crear un registro (POST)
+curl -i -X POST $BASE/clientes \
+  -H "Content-Type: application/json" \
+  -d '{"nombre": "Sofia Ramirez", "email": "sofia.ramirez@email.com", "telefono": "555-3001"}'
+
+# Actualizar un registro (PUT)
+curl -i -X PUT $BASE/clientes/1 \
+  -H "Content-Type: application/json" \
+  -d '{"nombre": "Ana Garcia Lopez", "email": "ana.garcia@email.com", "telefono": "555-1001"}'
+
+# Eliminar un registro (DELETE)
+curl -i -X DELETE $BASE/pedidos/1
+```
+
+La primera línea de la respuesta es el código de estado. Por ejemplo, al crear un cliente deberías ver algo como:
+
+```
+HTTP/1.1 201 CREATED
+Content-Type: application/json
+...
+
+{
+  "id_cliente": 4,
+  "nombre": "Sofia Ramirez",
+  ...
+}
+```
+
+**Leer el JSON con formato**
+
+Cuando una lista es larga, quita `-i`, agrega `-s` y pasa la respuesta por el formateador de Python (en Windows usa `python` en lugar de `python3`):
+
+```sh
+curl -s $BASE/pedidos | python3 -m json.tool --no-ensure-ascii
+```
+
+**Cómo diseñar tus pruebas**
+
+Probar que el CRUD funciona con datos correctos es solo el principio. Para auditar, cambia **una sola cosa a la vez** respecto a una petición válida y observa qué responde la API:
+
+- **Omite** un campo obligatorio, o envía el cuerpo vacío: `-d '{}'`.
+- **Cambia el tipo** de un campo: un texto donde se espera un número, o al revés.
+- **Usa valores límite**: `0`, números negativos, textos más largos que lo que permite la columna en `tienda_simple.sql`.
+- **Usa ids que no existen**, en la URL o dentro del cuerpo (por ejemplo, un `id_cliente` inexistente en un pedido).
+- **Repite** una petición que debería violar una restricción `UNIQUE`.
+- **Envía un cuerpo que no sea JSON**: `-d 'esto no es json'`.
+- **Revisa los efectos secundarios:** después de una petición, consulta con `GET` los registros relacionados. Por ejemplo, después de crear un pedido, ¿cambió algo en el producto? Después de borrar un cliente, ¿qué pasó con sus pedidos?
+
+Para cada prueba, compara la respuesta con lo que **debería** pasar según `tienda_simple.sql`, tu `openapi.yaml` y el sentido común de una tienda: el código de estado, el cuerpo de la respuesta y el estado de la base de datos después de la petición.
+
+> **Guarda tus pruebas:** mientras respondes las preguntas guía, conserva cada comando que ejecutes y la respuesta completa que obtuviste. Los usarás como evidencia en tu registro de hallazgos. Si una prueba modificó datos y quieres repetirla desde cero, restaura la base de datos (sección 1).
+
+### Preguntas guía
+
+Cada pregunta tiene una clave (L1, I2, etc.) que usarás en tu registro de hallazgos.
 
 **Lógica de negocio**
-- ¿Quién debería calcular el `total` de un pedido: el cliente que llama a la API o el servidor?
-- ¿Qué debería pasar con el inventario (`stock`) cuando alguien hace un pedido?
-- Si dos operaciones de base de datos deben ocurrir juntas, ¿qué pasa si la segunda falla?
+- **L1.** ¿Quién debería calcular el `total` de un pedido: el cliente que llama a la API o el servidor?
+- **L2.** ¿Qué debería pasar con el inventario (`stock`) cuando alguien hace un pedido?
+- **L3.** Si dos operaciones de base de datos deben ocurrir juntas, ¿qué pasa si la segunda falla?
 
 **Integridad de datos**
-- ¿Qué pasa con los pedidos de un cliente cuando lo borras? ¿Y si intentas borrar un producto que tiene pedidos? ¿Las dos políticas tienen sentido para una tienda? ¿La API le avisa a quien la usa?
-- ¿Qué pasa si actualizas un registro con `PUT` y no envías todos sus campos?
+- **I1.** ¿Qué pasa con los pedidos de un cliente cuando lo borras? ¿Y si intentas borrar un producto que tiene pedidos? ¿Las dos políticas tienen sentido para una tienda? ¿La API le avisa a quien la usa?
+- **I2.** ¿Qué pasa si actualizas un registro con `PUT` y no envías todos sus campos?
 
 **Validación de entradas**
-- ¿Qué valores absurdos acepta la API? Prueba cantidades, precios y existencias negativas o en cero, textos muy largos y tipos de dato equivocados.
+- **V1.** ¿Qué valores absurdos acepta la API? Prueba cantidades, precios y existencias negativas o en cero, textos muy largos y tipos de dato equivocados.
 
 **Semántica HTTP**
-- ¿Cada situación de error devuelve el código HTTP adecuado? Por ejemplo, ¿qué código debería devolver un email duplicado?
-- ¿Las respuestas coinciden con lo que promete el YAML?
+- **H1.** ¿Cada situación de error devuelve el código HTTP adecuado? Por ejemplo, ¿qué código debería devolver un email duplicado?
+- **H2.** ¿Las respuestas coinciden con lo que promete el YAML?
 
 **Seguridad**
-- ¿Qué información ve quien llama a la API cuando ocurre un error?
-- ¿Cómo está configurado el servidor al arrancar? ¿Sería aceptable en producción?
-- ¿Qué orígenes pueden llamar a la API desde un navegador?
+- **S1.** ¿Qué información ve quien llama a la API cuando ocurre un error?
+- **S2.** ¿Cómo está configurado el servidor al arrancar? ¿Sería aceptable en producción?
+- **S3.** ¿Qué orígenes pueden llamar a la API desde un navegador?
 
-Registra cada hallazgo en `mi_solucion/decisiones.md`:
+### Registro de hallazgos
 
-| # | Hallazgo | Evidencia (cómo lo comprobé) | Decisión | Justificación |
-|---|---|---|---|---|
-| 1 | | comando `curl` y respuesta obtenida | Aceptar / Modificar / Rechazar | |
-| … | | | | |
+Registra tus resultados en `mi_solucion/decisiones.md`, en una tabla como esta:
+
+| # | Pregunta | Hallazgo | Evidencia (cómo lo comprobé) | Decisión | Justificación |
+|---|---|---|---|---|---|
+| 1 | V1 | La API acepta una `cantidad` negativa en un pedido | E1: `POST /pedidos` con `cantidad: -3` → 201 | Modificar | … |
+| 2 | V1 | … | … | … | … |
+| 3 | H1 | Consultar un cliente con un id inexistente responde 404 con un mensaje claro | E3: `GET /clientes/9999` → 404 | Aceptar | Comportamiento correcto: … |
+| 4 | Otro | … | … | … | … |
+
+Reglas:
+
+- **Las 11 preguntas (L1 a S3) deben aparecer en al menos una fila.** Si al revisar una pregunta el comportamiento es correcto, regístralo con su evidencia y la decisión *Aceptar*, como en la fila 3. Así queda claro que la revisaste.
+- **Una pregunta puede tener varias filas** si encontraste más de un hallazgo relacionado, como V1 en el ejemplo.
+- **Los hallazgos que no correspondan a ninguna pregunta se marcan como `Otro`.** Ir más allá de la guía también cuenta.
+- En la columna **Evidencia** escribe solo una referencia corta: la clave de la evidencia (E1, E2, …), la petición resumida y el código de estado. Si el hallazgo viene de leer el código, escribe el archivo y la línea (por ejemplo, `main.py:57`).
+
+Debajo de la tabla, en el mismo `decisiones.md`, agrega una sección **Evidencias** con cada prueba completa: el comando exacto y la respuesta que obtuviste, tal como aparecieron en la terminal. Cualquier persona debe poder repetir tu prueba y ver lo mismo. Por ejemplo:
+
+````markdown
+## Evidencias
+
+### E1
+```
+$ curl -i -X POST $BASE/pedidos -H "Content-Type: application/json" -d '{"id_cliente": 1, "id_producto": 2, "cantidad": -3}'
+HTTP/1.1 201 CREATED
+Content-Type: application/json
+...
+
+{ ... }
+```
+
+### E3
+```
+$ curl -i $BASE/clientes/9999
+HTTP/1.1 404 NOT FOUND
+Content-Type: application/json
+...
+
+{
+  "code": "NOT_FOUND",
+  "message": "Cliente con ID 9999 no encontrado."
+}
+```
+````
+
+Una misma evidencia puede servir para varias filas de la tabla.
+
+Las decisiones posibles son:
 
 - **Aceptar:** el comportamiento es correcto o es un riesgo que decides asumir; explica por qué.
 - **Modificar:** hay que corregirlo; lo harás en la sección 7.
@@ -528,6 +657,8 @@ comprobarlo. No modifiques ningún archivo.
 ```
 
 Agrega al final de `decisiones.md` una sección **"Comparación con la auditoría de la IA"**:
+
+Organiza la comparación usando las mismas claves de pregunta (L1 a S3 y Otro):
 
 - ¿Qué encontró la IA que tú no?
 - ¿Qué encontraste tú que la IA no?
@@ -634,7 +765,7 @@ Todo va dentro de la carpeta `mi_solucion/` y se entrega en **Canvas** como un s
 | Criterio | Descripción | Ponderación |
 |---|---|---|
 | Trazabilidad de requerimientos | La tabla relaciona cada restricción del esquema SQL con el YAML y el código, e identifica correctamente qué se perdió en cada paso. | 15% |
-| Calidad de la auditoría | La auditoría cubre las cinco categorías, cada conclusión está respaldada por evidencia reproducible (comandos y respuestas) y se compara de forma crítica con la auditoría de la IA y con el backend de referencia. Se evalúa la profundidad de la revisión, no el número de fallas encontradas. | 25% |
+| Calidad de la auditoría | La auditoría responde las 11 preguntas guía (columna Pregunta), cada conclusión está respaldada por evidencia reproducible (comandos y respuestas) y se compara de forma crítica con la auditoría de la IA y con el backend de referencia. Se evalúa la profundidad de la revisión, no el número de fallas encontradas. | 25% |
 | Justificación de decisiones | Cada decisión (aceptar, modificar o rechazar) se sustenta en argumentos de la disciplina: integridad de datos, semántica HTTP, seguridad y reglas del negocio. | 20% |
 | Funcionamiento después de la corrección | El backend corregido resuelve los hallazgos marcados, no rompe lo que ya funcionaba y lo demuestra con las pruebas de Schemathesis y `curl`. | 15% |
 | Uso intencional y fundamentado de la IA | Los prompts son claros, el agente se usa con propósito, sus resultados se verifican y se compara de forma crítica su auditoría con la propia. | 15% |
